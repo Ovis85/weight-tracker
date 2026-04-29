@@ -18,7 +18,11 @@ def load_data():
         "https://www.googleapis.com/auth/spreadsheets.readonly",
         "https://www.googleapis.com/auth/drive.readonly",
     ]
-    creds = Credentials.from_service_account_file(CREDENTIALS_FILE, scopes=scopes)
+    st.write("Secret keys found:", list(st.secrets.keys()))
+    if "gcp_service_account" in st.secrets:
+        creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scopes)
+    else:
+        creds = Credentials.from_service_account_file(CREDENTIALS_FILE, scopes=scopes)
     client = gspread.authorize(creds)
     sheet = client.open_by_key(SHEET_ID).worksheet(SHEET_NAME)
     df = pd.DataFrame(sheet.get_all_records())
