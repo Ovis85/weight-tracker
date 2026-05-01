@@ -12,17 +12,25 @@ GOAL_WEIGHT = 64.0
 WEEKLY_LOSS_RATE = 0.25  # kg per week
 
 
+def get_creds(readonly=True):
+    if readonly:
+        scopes = [
+            "https://www.googleapis.com/auth/spreadsheets.readonly",
+            "https://www.googleapis.com/auth/drive.readonly",
+        ]
+    else:
+        scopes = [
+            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive",
+        ]
+    if "gcp_service_account" in st.secrets:
+        return Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scopes)
+    return Credentials.from_service_account_file(CREDENTIALS_FILE, scopes=scopes)
+
+
 @st.cache_data(ttl=300)
 def load_data():
-    scopes = [
-        "https://www.googleapis.com/auth/spreadsheets.readonly",
-        "https://www.googleapis.com/auth/drive.readonly",
-    ]
-    if "gcp_service_account" in st.secrets:
-        creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scopes)
-    else:
-        creds = Credentials.from_service_account_file(CREDENTIALS_FILE, scopes=scopes)
-    client = gspread.authorize(creds)
+    client = gspread.authorize(get_creds(readonly=True))
     sheet = client.open_by_key(SHEET_ID).worksheet(SHEET_NAME)
     df = pd.DataFrame(sheet.get_all_records())
 
@@ -33,8 +41,31 @@ def load_data():
     return df.sort_values("Date").reset_index(drop=True)
 
 
-st.set_page_config(page_title="Weight Tracker", layout="wide")
+def log_weight(date, weight):
+    client = gspread.authorize(get_creds(readonly=False))
+    sheet = client.open_by_key(SHEET_ID).worksheet(SHEET_NAME)
+    date_str = date.strftime("%d/%m/%Y")
+    cell = sheet.find(date_str)
+    if cell:
+        sheet.update_cell(cell.row, 3, weight)
+        return True
+    return False
+
+
+st.set_page_config(page_title="Weight Tracker")
 st.title("Weight Tracker")
+
+# --- Log weight form ---
+with st.expander("Log today's weight", expanded=True):
+    log_date = st.date_input("Date", value=datetime.today())
+    log_weight_val = st.number_input("Weight (kg)", min_value=40.0, max_value=200.0, step=0.05, format="%.2f")
+    if st.button("Save", use_container_width=True):
+        if log_weight(log_date, log_weight_val):
+            st.success(f"Saved {log_weight_val} kg for {log_date.strftime('%d/%m/%Y')}")
+            st.cache_data.clear()
+            st.rerun()
+        else:
+            st.error(f"Date {log_date.strftime('%d/%m/%Y')} not found in sheet.")
 
 if st.button("Refresh data"):
     st.cache_data.clear()
@@ -56,9 +87,10 @@ projected_date = last_date + timedelta(weeks=weeks_to_goal)
 progress = max(0.0, min(1.0, (start_weight - current_weight) / (start_weight - GOAL_WEIGHT)))
 
 # --- Metrics ---
-c1, c2, c3, c4 = st.columns(4)
+c1, c2 = st.columns(2)
 c1.metric("Current", f"{current_weight:.1f} kg")
 c2.metric("Goal", f"{GOAL_WEIGHT} kg")
+c3, c4 = st.columns(2)
 c3.metric("To go", f"{remaining:.1f} kg")
 c4.metric("Est. goal date", projected_date.strftime("%d %b %Y"))
 
@@ -114,7 +146,7 @@ fig.add_trace(go.Scatter(
     line=dict(color="red", width=1, dash="dot"),
 ))
 
-chart_start = df.dropna(subset=["Weight"])["Date"].min()
+chart_start = actual["Date"].min()
 chart_end = projected_date
 
 fig.update_layout(
@@ -126,7 +158,7 @@ fig.update_layout(
     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
 )
 
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False, "scrollZoom": False})
 
 # --- Weekly averages chart ---
 st.subheader("Weekly Averages (7da)")
@@ -156,6 +188,6 @@ st.plotly_chart(fig2, use_container_width=True)
 
 # --- Recent entries ---
 st.subheader("Recent Entries")
-recent = df.dropna(subset=["Weight"]).tail(14).sort_values("Date", ascending=False).copy()
+recent = actual.tail(14).sort_values("Date", ascending=False).copy()
 recent["Date"] = recent["Date"].dt.strftime("%d/%m/%Y")
 st.markdown(recent.to_html(index=False), unsafe_allow_html=True)
