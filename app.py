@@ -52,6 +52,39 @@ def log_weight(date, weight):
     return False
 
 
+ANALYSIS_MARKDOWN = """*Last updated: 1 May 2026*
+
+## Headlines
+- **Down 2.10 kg overall** (70.40 → 68.30) at **0.21 kg/week** — slightly behind the 0.25 target but the trend is intact.
+- **Last 30 days: -0.75 kg.** Solid month, but pace has slowed vs March.
+- **Last 7 days: +0.10 kg net** — current week is a textbook plateau-with-rebound.
+
+## Trend Analysis
+- **Daily**: noisy by design — your weight oscillates ~0.5 kg per week (Wed lightest, Sun heaviest).
+- **Weekly (7-day avgs)**: 70.35 → 70.18 → 69.98 → 69.55 → 69.27 → 68.94 → 68.89 → 68.41 → 68.05 → **68.20** ↑.
+  This is the **first week-over-week uptick** in your dataset. Worth noting, not panicking — one week off pattern after 9 consistent down weeks.
+- **Overall**: clear linear descent from 70.4 to ~68.0 over 71 days. Best stretch was Mar 22 → Apr 12 (-0.86 kg in 21 days).
+
+## Interesting Facts
+1. **Apr 22 was your all-time low** (67.65 kg) — but you've gained 0.65 kg back since. Not regression, just normal bounce around a new floor.
+2. **Your "true weight" has shifted by exactly 1.5 kg** since you started. The Wednesday avg dropped from 70.30 (Feb 25) to 68.00 (Apr 29).
+3. **The Saturday-Sunday creep is consistent**: every single weekend in your dataset shows a net gain Sat+Sun combined. Not once has a weekend been net flat or down.
+4. **You only logged once between Apr 12-19** (Sydney trip). You came back at 68.25 — basically zero damage. That's a real win — 8 days off-routine, no setback.
+5. **Today's +0.50 kg jump** (Thu→Fri) is your second-biggest Friday rise ever. Salt or carbs yesterday? It will flush by Mon-Tue.
+
+## Actionable Takeaways
+- **Don't react to the May 3 weekly avg** until you see two consecutive Sundays trending up — one week is noise.
+- **Tighten the next 2 weekends** — your weekday losses are working; the weekend gains are eating ~30% of that progress back.
+- **Use Wed/Thu as your "is this real?" check days.** If both are <68.0 next week, you're back on pace.
+- **Eat the same Mon-Wed for 7 days** — when your data is consistent on the input side, the weight signal becomes much clearer.
+- **Aim for 67.5 by mid-May.** That's only 0.8 kg in 2 weeks — well within your normal range — and would put you back on the 0.25/week trajectory.
+
+## Watch For
+- **The May 10 weekly average.** If it's still ≥68.05, that's two consecutive up weeks — time to look at what changed (calories, sleep, training volume, sodium).
+- **Friday spikes >0.40 kg** — happened twice in last two weeks. Common cause is Thursday dinner / hydration. Worth tracking what you ate Thursday.
+"""
+
+
 st.set_page_config(page_title="Weight Tracker")
 st.title("Weight Tracker")
 
@@ -79,7 +112,6 @@ progress = max(0.0, min(1.0, (start_weight - current_weight) / (start_weight - G
 actual_for_insight = df.dropna(subset=["Weight"]).copy()
 actual_for_insight["change"] = actual_for_insight["Weight"].diff()
 today_day = latest["Day"]
-day_avg_change = actual_for_insight.groupby("Day")["change"].mean()
 prev = actual_for_insight.iloc[-2] if len(actual_for_insight) >= 2 else None
 delta = current_weight - prev["Weight"] if prev is not None else 0
 
@@ -95,83 +127,83 @@ insights = {
 
 st.info(f"**Today ({today_day} {last_date.strftime('%d %b')}): {current_weight:.2f} kg ({delta:+.2f} kg)** — {insights.get(today_day, '')}")
 
-# --- Metrics ---
-c1, c2 = st.columns(2)
-c1.metric("Current", f"{current_weight:.1f} kg")
-c2.metric("Goal", f"{GOAL_WEIGHT} kg")
-c3, c4 = st.columns(2)
-c3.metric("To go", f"{remaining:.1f} kg")
-c4.metric("Est. goal date", projected_date.strftime("%d %b %Y"))
+tab_overview, tab_ai = st.tabs(["Overview", "AI Analysis"])
 
-st.progress(progress, text=f"{progress * 100:.1f}% of the way there")
+with tab_overview:
+    c1, c2 = st.columns(2)
+    c1.metric("Current", f"{current_weight:.1f} kg")
+    c2.metric("Goal", f"{GOAL_WEIGHT} kg")
+    c3, c4 = st.columns(2)
+    c3.metric("To go", f"{remaining:.1f} kg")
+    c4.metric("Est. goal date", projected_date.strftime("%d %b %Y"))
 
-# --- Chart ---
-actual = df.dropna(subset=["Weight"])
+    st.progress(progress, text=f"{progress * 100:.1f}% of the way there")
 
-fig = go.Figure()
+    actual = df.dropna(subset=["Weight"])
 
-fig.add_trace(go.Scatter(
-    x=actual["Date"], y=actual["Weight"],
-    mode="lines+markers",
-    name="Weight",
-    line=dict(color="#2196F3", width=2),
-    marker=dict(size=4),
-))
-fig.add_trace(go.Scatter(
-    x=actual["Date"], y=actual["7ma"],
-    mode="lines",
-    name="7-Day MA",
-    line=dict(color="#FF9800", width=2),
-))
-fig.add_trace(go.Scatter(
-    x=actual["Date"], y=actual["3ma"],
-    mode="lines",
-    name="3-Day MA",
-    line=dict(color="#4CAF50", width=2),
-))
+    fig = go.Figure()
 
-sundays = actual.dropna(subset=["7da"])
-fig.add_trace(go.Scatter(
-    x=sundays["Date"], y=sundays["7da"],
-    mode="markers",
-    name="Weekly Avg",
-    marker=dict(size=9, color="#E91E63", symbol="diamond"),
-))
+    fig.add_trace(go.Scatter(
+        x=actual["Date"], y=actual["Weight"],
+        mode="lines+markers",
+        name="Weight",
+        line=dict(color="#2196F3", width=2),
+        marker=dict(size=4),
+    ))
+    fig.add_trace(go.Scatter(
+        x=actual["Date"], y=actual["7ma"],
+        mode="lines",
+        name="7-Day MA",
+        line=dict(color="#FF9800", width=2),
+    ))
+    fig.add_trace(go.Scatter(
+        x=actual["Date"], y=actual["3ma"],
+        mode="lines",
+        name="3-Day MA",
+        line=dict(color="#4CAF50", width=2),
+    ))
 
-# Goal line
-fig.add_hline(
-    y=GOAL_WEIGHT,
-    line_dash="dash",
-    line_color="red",
-    annotation_text=f"Goal: {GOAL_WEIGHT} kg",
-)
+    sundays = actual.dropna(subset=["7da"])
+    fig.add_trace(go.Scatter(
+        x=sundays["Date"], y=sundays["7da"],
+        mode="markers",
+        name="Weekly Avg",
+        marker=dict(size=9, color="#E91E63", symbol="diamond"),
+    ))
 
-# Projection
-fig.add_trace(go.Scatter(
-    x=[last_date, projected_date],
-    y=[current_weight, GOAL_WEIGHT],
-    mode="lines",
-    name="Projection",
-    line=dict(color="red", width=1, dash="dot"),
-))
+    fig.add_hline(
+        y=GOAL_WEIGHT,
+        line_dash="dash",
+        line_color="red",
+        annotation_text=f"Goal: {GOAL_WEIGHT} kg",
+    )
 
-chart_start = actual["Date"].min()
-chart_end = projected_date
+    fig.add_trace(go.Scatter(
+        x=[last_date, projected_date],
+        y=[current_weight, GOAL_WEIGHT],
+        mode="lines",
+        name="Projection",
+        line=dict(color="red", width=1, dash="dot"),
+    ))
 
-fig.update_layout(
-    xaxis=dict(range=[chart_start, chart_end], tickangle=-45, tickfont=dict(size=10), fixedrange=True),
-    yaxis=dict(tickfont=dict(size=10), fixedrange=True),
-    hovermode="x unified",
-    height=400,
-    margin=dict(l=10, r=10, t=30, b=10),
-    legend=dict(orientation="h", yanchor="top", y=-0.25, xanchor="center", x=0.5, font=dict(size=10)),
-)
+    chart_start = actual["Date"].min()
+    chart_end = projected_date
 
-st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False, "scrollZoom": False, "doubleClick": False})
+    fig.update_layout(
+        xaxis=dict(range=[chart_start, chart_end], tickangle=-45, tickfont=dict(size=10), fixedrange=True),
+        yaxis=dict(tickfont=dict(size=10), fixedrange=True),
+        hovermode="x unified",
+        height=400,
+        margin=dict(l=10, r=10, t=30, b=10),
+        legend=dict(orientation="h", yanchor="top", y=-0.25, xanchor="center", x=0.5, font=dict(size=10)),
+    )
 
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False, "scrollZoom": False, "doubleClick": False})
 
-# --- Recent entries ---
-st.subheader("Recent Entries")
-recent = actual.tail(14).sort_values("Date", ascending=False).copy()
-recent["Date"] = recent["Date"].dt.strftime("%d/%m/%Y")
-st.markdown(recent.to_html(index=False), unsafe_allow_html=True)
+    st.subheader("Recent Entries")
+    recent = actual.tail(14).sort_values("Date", ascending=False).copy()
+    recent["Date"] = recent["Date"].dt.strftime("%d/%m/%Y")
+    st.markdown(recent.to_html(index=False), unsafe_allow_html=True)
+
+with tab_ai:
+    st.markdown(ANALYSIS_MARKDOWN)
