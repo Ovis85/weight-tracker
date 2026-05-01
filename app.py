@@ -65,29 +65,31 @@ c4.metric("Est. goal date", projected_date.strftime("%d %b %Y"))
 st.progress(progress, text=f"{progress * 100:.1f}% of the way there")
 
 # --- Chart ---
+actual = df.dropna(subset=["Weight"])
+
 fig = go.Figure()
 
 fig.add_trace(go.Scatter(
-    x=df["Date"], y=df["Weight"],
+    x=actual["Date"], y=actual["Weight"],
     mode="lines+markers",
     name="Weight",
     line=dict(color="#2196F3", width=2),
     marker=dict(size=4),
 ))
 fig.add_trace(go.Scatter(
-    x=df["Date"], y=df["7ma"],
+    x=actual["Date"], y=actual["7ma"],
     mode="lines",
     name="7-Day MA",
     line=dict(color="#FF9800", width=2),
 ))
 fig.add_trace(go.Scatter(
-    x=df["Date"], y=df["3ma"],
+    x=actual["Date"], y=actual["3ma"],
     mode="lines",
     name="3-Day MA",
     line=dict(color="#4CAF50", width=2),
 ))
 
-sundays = df.dropna(subset=["7da"])
+sundays = actual.dropna(subset=["7da"])
 fig.add_trace(go.Scatter(
     x=sundays["Date"], y=sundays["7da"],
     mode="markers",
@@ -128,7 +130,7 @@ st.plotly_chart(fig, use_container_width=True)
 
 # --- Weekly averages chart ---
 st.subheader("Weekly Averages (7da)")
-sundays_only = df.dropna(subset=["7da"])
+sundays_only = actual.dropna(subset=["7da"])
 fig2 = go.Figure()
 fig2.add_trace(go.Bar(
     x=sundays_only["Date"],
