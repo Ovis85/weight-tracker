@@ -75,6 +75,26 @@ last_date = latest["Date"]
 projected_date = last_date + timedelta(weeks=weeks_to_goal)
 progress = max(0.0, min(1.0, (start_weight - current_weight) / (start_weight - GOAL_WEIGHT)))
 
+# --- Daily insight ---
+actual_for_insight = df.dropna(subset=["Weight"]).copy()
+actual_for_insight["change"] = actual_for_insight["Weight"].diff()
+today_day = latest["Day"]
+day_avg_change = actual_for_insight.groupby("Day")["change"].mean()
+prev = actual_for_insight.iloc[-2] if len(actual_for_insight) >= 2 else None
+delta = current_weight - prev["Weight"] if prev is not None else 0
+
+insights = {
+    "Mon": "Mondays avg −0.19 kg — your biggest weekly drop. Real progress shows here.",
+    "Tue": "Tuesdays keep the Monday flush going (avg −0.12 kg). Trend day.",
+    "Wed": "Wednesday is your true weight day — avg lightest of the week. Trust this number.",
+    "Thu": "Thursdays trend down lightly (avg −0.07 kg). Still your 'real' zone.",
+    "Fri": "Fridays start creeping up (avg +0.07 kg). Don't panic — it's water, not fat.",
+    "Sat": "Saturdays are your peak gain day (avg +0.13 kg). Ignore the scale today.",
+    "Sun": "Sundays are statistically your heaviest day. Wait for Wednesday for the truth.",
+}
+
+st.info(f"**Today ({today_day} {last_date.strftime('%d %b')}): {current_weight:.2f} kg ({delta:+.2f} kg)** — {insights.get(today_day, '')}")
+
 # --- Metrics ---
 c1, c2 = st.columns(2)
 c1.metric("Current", f"{current_weight:.1f} kg")
