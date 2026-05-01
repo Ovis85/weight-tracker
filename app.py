@@ -55,17 +55,6 @@ def log_weight(date, weight):
 st.set_page_config(page_title="Weight Tracker")
 st.title("Weight Tracker")
 
-# --- Log weight form ---
-with st.expander("Log today's weight", expanded=True):
-    log_date = st.date_input("Date", value=datetime.today())
-    log_weight_val = st.number_input("Weight (kg)", min_value=40.0, max_value=200.0, step=0.05, format="%.2f")
-    if st.button("Save", use_container_width=True):
-        if log_weight(log_date, log_weight_val):
-            st.success(f"Saved {log_weight_val} kg for {log_date.strftime('%d/%m/%Y')}")
-            st.cache_data.clear()
-            st.rerun()
-        else:
-            st.error(f"Date {log_date.strftime('%d/%m/%Y')} not found in sheet.")
 
 if st.button("Refresh data"):
     st.cache_data.clear()
@@ -150,41 +139,16 @@ chart_start = actual["Date"].min()
 chart_end = projected_date
 
 fig.update_layout(
-    xaxis=dict(range=[chart_start, chart_end]),
-    xaxis_title="Date",
-    yaxis_title="Weight (kg)",
+    xaxis=dict(range=[chart_start, chart_end], tickangle=-45, tickfont=dict(size=10), fixedrange=True),
+    yaxis=dict(tickfont=dict(size=10), fixedrange=True),
     hovermode="x unified",
-    height=500,
-    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    height=400,
+    margin=dict(l=10, r=10, t=30, b=10),
+    legend=dict(orientation="h", yanchor="top", y=-0.25, xanchor="center", x=0.5, font=dict(size=10)),
 )
 
-st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False, "scrollZoom": False})
+st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False, "scrollZoom": False, "doubleClick": False})
 
-# --- Weekly averages chart ---
-st.subheader("Weekly Averages (7da)")
-sundays_only = actual.dropna(subset=["7da"])
-fig2 = go.Figure()
-fig2.add_trace(go.Bar(
-    x=sundays_only["Date"],
-    y=sundays_only["7da"],
-    name="Weekly Avg",
-    marker_color="#00897B",
-))
-fig2.add_hline(
-    y=GOAL_WEIGHT,
-    line_dash="dash",
-    line_color="red",
-    annotation_text=f"Goal: {GOAL_WEIGHT} kg",
-)
-fig2.update_layout(
-    xaxis=dict(range=[chart_start, chart_end]),
-    xaxis_title="Week ending",
-    yaxis_title="Weight (kg)",
-    hovermode="x unified",
-    height=350,
-    yaxis=dict(range=[min(sundays_only["7da"].min() - 1, GOAL_WEIGHT - 1), sundays_only["7da"].max() + 1]),
-)
-st.plotly_chart(fig2, use_container_width=True)
 
 # --- Recent entries ---
 st.subheader("Recent Entries")
