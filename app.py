@@ -100,6 +100,15 @@ footer {visibility: hidden;}
 .stApp {
     background: linear-gradient(180deg, #F7F5F0 0%, #FAFAF9 100%);
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", system-ui, sans-serif;
+    color: #2A2A2A !important;
+}
+
+/* Force dark text everywhere */
+.stApp, .stApp p, .stApp span, .stApp div, .stApp li, .stApp strong, .stApp em {
+    color: #2A2A2A;
+}
+.stMarkdown, .stMarkdown p, .stMarkdown li, .stMarkdown strong {
+    color: #2A2A2A !important;
 }
 .block-container {
     padding-top: 1.5rem !important;
@@ -227,6 +236,13 @@ h2, h3 {
     border-radius: 16px !important;
     padding: 0.5rem !important;
     box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+}
+/* Force chart text colors */
+.js-plotly-plot text, .js-plotly-plot .legendtext, .js-plotly-plot .xtick text, .js-plotly-plot .ytick text {
+    fill: #555 !important;
+}
+.js-plotly-plot .annotation-text {
+    fill: #E76F51 !important;
 }
 
 /* ---------- Recent entries table ---------- */
