@@ -349,20 +349,21 @@ with tab_overview:
         x=actual["Date"], y=actual["Weight"],
         mode="lines+markers",
         name="Weight",
-        line=dict(color="#2196F3", width=2),
-        marker=dict(size=4),
+        line=dict(color="#B8B0A0", width=1.5),
+        marker=dict(size=4, color="#8A7E6A"),
+        opacity=0.7,
     ))
     fig.add_trace(go.Scatter(
         x=actual["Date"], y=actual["7ma"],
         mode="lines",
         name="7-Day MA",
-        line=dict(color="#FF9800", width=2),
+        line=dict(color="#00897B", width=3),
     ))
     fig.add_trace(go.Scatter(
         x=actual["Date"], y=actual["3ma"],
         mode="lines",
         name="3-Day MA",
-        line=dict(color="#4CAF50", width=2),
+        line=dict(color="#F4A261", width=2),
     ))
 
     sundays = actual.dropna(subset=["7da"])
@@ -370,14 +371,16 @@ with tab_overview:
         x=sundays["Date"], y=sundays["7da"],
         mode="markers",
         name="Weekly Avg",
-        marker=dict(size=9, color="#E91E63", symbol="diamond"),
+        marker=dict(size=10, color="#264653", symbol="diamond", line=dict(width=1.5, color="white")),
     ))
 
     fig.add_hline(
         y=GOAL_WEIGHT,
         line_dash="dash",
-        line_color="red",
+        line_color="#E76F51",
+        line_width=1.5,
         annotation_text=f"Goal: {GOAL_WEIGHT} kg",
+        annotation_font=dict(color="#E76F51", size=11),
     )
 
     fig.add_trace(go.Scatter(
@@ -385,19 +388,48 @@ with tab_overview:
         y=[current_weight, GOAL_WEIGHT],
         mode="lines",
         name="Projection",
-        line=dict(color="red", width=1, dash="dot"),
+        line=dict(color="#E76F51", width=1.5, dash="dot"),
+        opacity=0.6,
     ))
 
     chart_start = actual["Date"].min()
     chart_end = projected_date
 
     fig.update_layout(
-        xaxis=dict(range=[chart_start, chart_end], tickangle=-45, tickfont=dict(size=10), fixedrange=True),
-        yaxis=dict(tickfont=dict(size=10), fixedrange=True),
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+        font=dict(family="-apple-system, BlinkMacSystemFont, system-ui, sans-serif", color="#555"),
+        xaxis=dict(
+            range=[chart_start, chart_end],
+            tickangle=-45,
+            tickfont=dict(size=10, color="#888"),
+            fixedrange=True,
+            gridcolor="#F0EEE8",
+            linecolor="#ECEAE3",
+            showline=False,
+            zeroline=False,
+        ),
+        yaxis=dict(
+            tickfont=dict(size=10, color="#888"),
+            fixedrange=True,
+            gridcolor="#F0EEE8",
+            linecolor="#ECEAE3",
+            showline=False,
+            zeroline=False,
+        ),
         hovermode="x unified",
+        hoverlabel=dict(bgcolor="white", font_size=12, font_family="system-ui", bordercolor="#ECEAE3"),
         height=400,
         margin=dict(l=10, r=10, t=30, b=10),
-        legend=dict(orientation="h", yanchor="top", y=-0.25, xanchor="center", x=0.5, font=dict(size=10)),
+        legend=dict(
+            orientation="h",
+            yanchor="top",
+            y=-0.25,
+            xanchor="center",
+            x=0.5,
+            font=dict(size=10, color="#666"),
+            bgcolor="rgba(255,255,255,0)",
+        ),
     )
 
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False, "scrollZoom": False, "doubleClick": False})
