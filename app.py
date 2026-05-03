@@ -85,7 +85,209 @@ ANALYSIS_MARKDOWN = """*Last updated: 1 May 2026*
 """
 
 
-st.set_page_config(page_title="Weight Tracker")
+st.set_page_config(page_title="Weight Tracker", initial_sidebar_state="collapsed")
+
+st.markdown("""
+<style>
+/* ---------- Hide Streamlit chrome ---------- */
+header[data-testid="stHeader"] {display: none;}
+footer {visibility: hidden;}
+#MainMenu {visibility: hidden;}
+.stDeployButton {display: none;}
+[data-testid="stToolbar"] {display: none;}
+
+/* ---------- Page ---------- */
+.stApp {
+    background: linear-gradient(180deg, #F7F5F0 0%, #FAFAF9 100%);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", system-ui, sans-serif;
+}
+.block-container {
+    padding-top: 1.5rem !important;
+    padding-bottom: 4rem !important;
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+    max-width: 720px;
+}
+
+/* ---------- Title ---------- */
+h1 {
+    font-size: 1.75rem !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.02em !important;
+    color: #1A1A1A !important;
+    margin-bottom: 1rem !important;
+    padding: 0 !important;
+}
+
+/* ---------- Refresh button ---------- */
+button[kind="secondary"] {
+    background: white !important;
+    border: 1px solid #E5E5E0 !important;
+    border-radius: 12px !important;
+    color: #555 !important;
+    font-weight: 500 !important;
+    font-size: 0.85rem !important;
+    padding: 0.4rem 0.9rem !important;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+    transition: all 0.15s ease;
+}
+button[kind="secondary"]:hover {
+    border-color: #C0C0B8 !important;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+}
+
+/* ---------- Today's banner ---------- */
+[data-testid="stAlert"] {
+    background: white !important;
+    border: 1px solid #ECEAE3 !important;
+    border-left: 4px solid #00897B !important;
+    border-radius: 14px !important;
+    padding: 1rem 1.1rem !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    margin-top: 0.5rem !important;
+}
+[data-testid="stAlert"] p {
+    color: #2A2A2A !important;
+    font-size: 0.95rem !important;
+    line-height: 1.5 !important;
+}
+
+/* ---------- Metric cards ---------- */
+[data-testid="stMetric"] {
+    background: white;
+    border: 1px solid #ECEAE3;
+    border-radius: 16px;
+    padding: 1.1rem 1.2rem !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+}
+[data-testid="stMetricLabel"] {
+    color: #888 !important;
+    font-size: 0.78rem !important;
+    font-weight: 500 !important;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+[data-testid="stMetricValue"] {
+    color: #1A1A1A !important;
+    font-size: 1.6rem !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.02em;
+}
+
+/* ---------- Progress bar ---------- */
+.stProgress > div > div > div {
+    background: linear-gradient(90deg, #00897B 0%, #4CAF50 100%) !important;
+    border-radius: 999px !important;
+}
+.stProgress > div > div {
+    background: #ECEAE3 !important;
+    border-radius: 999px !important;
+    height: 8px !important;
+}
+
+/* ---------- Tabs ---------- */
+[data-baseweb="tab-list"] {
+    gap: 4px !important;
+    background: #ECEAE3 !important;
+    padding: 4px !important;
+    border-radius: 12px !important;
+    margin-bottom: 1.5rem !important;
+}
+[data-baseweb="tab"] {
+    background: transparent !important;
+    border-radius: 8px !important;
+    color: #666 !important;
+    font-weight: 600 !important;
+    font-size: 0.9rem !important;
+    padding: 0.5rem 1rem !important;
+    flex: 1 !important;
+    justify-content: center !important;
+    transition: all 0.15s ease;
+}
+[data-baseweb="tab"][aria-selected="true"] {
+    background: white !important;
+    color: #1A1A1A !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+[data-baseweb="tab-highlight"], [data-baseweb="tab-border"] {
+    display: none !important;
+}
+
+/* ---------- Subheaders ---------- */
+h2, h3 {
+    color: #1A1A1A !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.01em !important;
+}
+
+/* ---------- Plotly chart container ---------- */
+.js-plotly-plot {
+    background: white !important;
+    border: 1px solid #ECEAE3 !important;
+    border-radius: 16px !important;
+    padding: 0.5rem !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+}
+
+/* ---------- Recent entries table ---------- */
+table {
+    width: 100%;
+    background: white;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid #ECEAE3;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+    border-collapse: separate !important;
+    border-spacing: 0;
+    font-size: 0.85rem;
+}
+table th {
+    background: #F7F5F0 !important;
+    color: #666 !important;
+    font-weight: 600 !important;
+    font-size: 0.75rem !important;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0.7rem 0.6rem !important;
+    text-align: left;
+    border: none !important;
+}
+table td {
+    padding: 0.6rem !important;
+    border: none !important;
+    border-top: 1px solid #F0EEE8 !important;
+    color: #2A2A2A;
+}
+
+/* ---------- AI Analysis tab content ---------- */
+.stTabs [data-baseweb="tab-panel"] {
+    padding-top: 0.5rem;
+}
+
+/* AI tab markdown styling — give it some breathing room */
+.stTabs [data-baseweb="tab-panel"] h2 {
+    font-size: 1.1rem !important;
+    margin-top: 1.5rem !important;
+    margin-bottom: 0.6rem !important;
+    color: #00897B !important;
+}
+.stTabs [data-baseweb="tab-panel"] ul, .stTabs [data-baseweb="tab-panel"] ol {
+    padding-left: 1.2rem;
+}
+.stTabs [data-baseweb="tab-panel"] li {
+    margin-bottom: 0.4rem;
+    line-height: 1.55;
+}
+
+/* ---------- Mobile tweaks ---------- */
+@media (max-width: 600px) {
+    h1 { font-size: 1.5rem !important; }
+    [data-testid="stMetricValue"] { font-size: 1.35rem !important; }
+    .block-container { padding-left: 0.75rem !important; padding-right: 0.75rem !important; }
+}
+</style>
+""", unsafe_allow_html=True)
+
 st.title("Weight Tracker")
 
 
