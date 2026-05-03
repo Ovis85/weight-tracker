@@ -365,21 +365,21 @@ with tab_overview:
         x=actual["Date"], y=actual["Weight"],
         mode="lines+markers",
         name="Weight",
-        line=dict(color="#B8B0A0", width=1.5),
-        marker=dict(size=4, color="#8A7E6A"),
-        opacity=0.7,
-    ))
-    fig.add_trace(go.Scatter(
-        x=actual["Date"], y=actual["7ma"],
-        mode="lines",
-        name="7-Day MA",
-        line=dict(color="#00897B", width=3),
+        line=dict(color="#CBC2B0", width=1),
+        marker=dict(size=3, color="#A89E89"),
+        opacity=0.6,
     ))
     fig.add_trace(go.Scatter(
         x=actual["Date"], y=actual["3ma"],
         mode="lines",
-        name="3-Day MA",
-        line=dict(color="#F4A261", width=2),
+        name="3-Day Avg",
+        line=dict(color="#EA580C", width=2),
+    ))
+    fig.add_trace(go.Scatter(
+        x=actual["Date"], y=actual["7ma"],
+        mode="lines",
+        name="7-Day Avg",
+        line=dict(color="#0F766E", width=3.5),
     ))
 
     sundays = actual.dropna(subset=["7da"])
@@ -387,16 +387,17 @@ with tab_overview:
         x=sundays["Date"], y=sundays["7da"],
         mode="markers",
         name="Weekly Avg",
-        marker=dict(size=10, color="#264653", symbol="diamond", line=dict(width=1.5, color="white")),
+        marker=dict(size=11, color="#1E293B", symbol="diamond", line=dict(width=2, color="white")),
     ))
 
     fig.add_hline(
         y=GOAL_WEIGHT,
         line_dash="dash",
-        line_color="#E76F51",
+        line_color="#DC2626",
         line_width=1.5,
         annotation_text=f"Goal: {GOAL_WEIGHT} kg",
-        annotation_font=dict(color="#E76F51", size=11),
+        annotation_font=dict(color="#DC2626", size=11, family="-apple-system, system-ui"),
+        annotation_position="top right",
     )
 
     fig.add_trace(go.Scatter(
@@ -404,8 +405,8 @@ with tab_overview:
         y=[current_weight, GOAL_WEIGHT],
         mode="lines",
         name="Projection",
-        line=dict(color="#E76F51", width=1.5, dash="dot"),
-        opacity=0.6,
+        line=dict(color="#DC2626", width=1.5, dash="dot"),
+        opacity=0.5,
     ))
 
     chart_start = actual["Date"].min()
