@@ -52,36 +52,37 @@ def log_weight(date, weight):
     return False
 
 
-ANALYSIS_MARKDOWN = """*Last updated: 1 May 2026*
+ANALYSIS_MARKDOWN = """*Last updated: 5 May 2026*
 
 ## Headlines
-- **Down 2.10 kg overall** (70.40 → 68.30) at **0.21 kg/week** — slightly behind the 0.25 target but the trend is intact.
-- **Last 30 days: -0.75 kg.** Solid month, but pace has slowed vs March.
-- **Last 7 days: +0.10 kg net** — current week is a textbook plateau-with-rebound.
+- **Down 2.60 kg overall** (70.40 → 67.80) over 76 days at **0.24 kg/week** — right on your 0.25 target.
+- **Last 30 days: -1.45 kg.** Pace has *accelerated* — nearly double the 0.18 kg/week running average.
+- **Last 7 days: -0.65 kg.** Your best week of the cut. The "first uptick" worry from last week was noise.
 
 ## Trend Analysis
-- **Daily**: noisy by design — your weight oscillates ~0.5 kg per week (Wed lightest, Sun heaviest).
-- **Weekly (7-day avgs)**: 70.35 → 70.18 → 69.98 → 69.55 → 69.27 → 68.94 → 68.89 → 68.41 → 68.05 → **68.20** ↑.
-  This is the **first week-over-week uptick** in your dataset. Worth noting, not panicking — one week off pattern after 9 consistent down weeks.
-- **Overall**: clear linear descent from 70.4 to ~68.0 over 71 days. Best stretch was Mar 22 → Apr 12 (-0.86 kg in 21 days).
+- **Daily**: still ~0.5 kg weekly oscillation — Mon/Wed lightest, Fri/Sat heaviest. Pattern unchanged.
+- **Weekly (7-day avgs)**: 70.35 → 70.18 → 69.98 → 69.55 → 69.27 → 68.94 → 68.89 → 68.05 → **68.09** → trending toward ~67.85 next Sunday.
+  The Apr 26 → May 3 jump (+0.04) was effectively flat, not a reversal. The 7-day rolling MA has dropped from 68.26 (May 1) to **67.87** today — a 0.39 kg drop in 4 days.
+- **Overall**: clean linear descent. Last 60 days: -2.05 kg. Last 30 days: -1.45 kg. Most recent stretch is the steepest of the cut.
 
 ## Interesting Facts
-1. **Apr 22 was your all-time low** (67.65 kg) — but you've gained 0.65 kg back since. Not regression, just normal bounce around a new floor.
-2. **Your "true weight" has shifted by exactly 1.5 kg** since you started. The Wednesday avg dropped from 70.30 (Feb 25) to 68.00 (Apr 29).
-3. **The Saturday-Sunday creep is consistent**: every single weekend in your dataset shows a net gain Sat+Sun combined. Not once has a weekend been net flat or down.
-4. **You only logged once between Apr 12-19** (Sydney trip). You came back at 68.25 — basically zero damage. That's a real win — 8 days off-routine, no setback.
-5. **Today's +0.50 kg jump** (Thu→Fri) is your second-biggest Friday rise ever. Salt or carbs yesterday? It will flush by Mon-Tue.
+1. **Yesterday (Mon May 4) was a new all-time low: 67.55 kg.** The previous floor (67.65 on Apr 22) held for almost 2 weeks before being broken.
+2. **Mondays are your high-signal day.** Avg daily change on Mondays across the cut: **-0.20 kg** — by far your biggest drop day. Tuesday adds another -0.09. By Wednesday you're at the week's true reading.
+3. **Weekend damage has shrunk.** Sat+Sun combined averaged +0.21 kg early in the cut; the last two weekends netted -0.10 and -0.45. Whatever you changed in late April is working.
+4. **You're now 3.80 kg from start, 3.80 kg into a 6.40 kg cut — exactly 41% to goal.** At current 30-day pace (1.45 kg/month) you hit 64.0 in **~11 weeks** (mid-July). At the original 0.25/week pace it's 15 weeks.
+5. **The Sydney trip cost you nothing.** You logged 68.25 on return (Apr 20) and you're 0.45 kg below that 15 days later. Travel is not your bottleneck.
 
 ## Actionable Takeaways
-- **Don't react to the May 3 weekly avg** until you see two consecutive Sundays trending up — one week is noise.
-- **Tighten the next 2 weekends** — your weekday losses are working; the weekend gains are eating ~30% of that progress back.
-- **Use Wed/Thu as your "is this real?" check days.** If both are <68.0 next week, you're back on pace.
-- **Eat the same Mon-Wed for 7 days** — when your data is consistent on the input side, the weight signal becomes much clearer.
-- **Aim for 67.5 by mid-May.** That's only 0.8 kg in 2 weeks — well within your normal range — and would put you back on the 0.25/week trajectory.
+- **Hold the line — don't celebrate-eat.** A 0.65 kg week feels like license to relax; that's exactly when people give back two weeks of progress in one weekend.
+- **Watch Sunday May 10's 7da.** A reading ≤67.90 confirms you've moved into a new range. ≤67.70 would be a meaningful step-down.
+- **Lock the weekend behaviors.** The last two weekends were unusually clean — figure out what was different (food consistency? earlier dinners? lower alcohol?) and keep doing it.
+- **Re-check body comp around 66.5 kg**, not at the goal. If muscle mass is holding, the 64 kg target stays valid; if you're shedding lean tissue, you may want to slow the rate or recalculate the target.
+- **Sub-goal: 67.0 by May 19.** That's 0.80 kg in 2 weeks — slightly above your average pace but well inside the last 7 days' rate.
 
 ## Watch For
-- **The May 10 weekly average.** If it's still ≥68.05, that's two consecutive up weeks — time to look at what changed (calories, sleep, training volume, sodium).
-- **Friday spikes >0.40 kg** — happened twice in last two weeks. Common cause is Thursday dinner / hydration. Worth tracking what you ate Thursday.
+- **Mon/Tue rebounds above 68.0.** With 7ma at 67.87, any Mon or Tue reading >68.0 means the trend has stalled. Last 4 Mondays: 68.25, 68.45, 67.55 — the May 4 reading is the new benchmark.
+- **A 7da increase ≥0.20 kg.** One flat Sunday is fine; a real rise is the signal to look at calories/sleep/training, not the day-to-day noise.
+- **Friday spikes >0.40 kg.** Pattern from late April held — Thu→Fri averages +0.07 but spikes flag a high-sodium or high-carb Thursday worth noting.
 """
 
 
