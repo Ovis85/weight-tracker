@@ -452,10 +452,140 @@ with tab_overview:
 
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False, "scrollZoom": False, "doubleClick": False})
 
-    st.subheader("Recent Entries")
-    recent = actual.tail(14).sort_values("Date", ascending=False).copy()
-    recent["Date"] = recent["Date"].dt.strftime("%d/%m/%Y")
-    st.markdown(recent.to_html(index=False), unsafe_allow_html=True)
+    # ---------- Trend Velocity ----------
+    st.subheader("Trend Velocity")
+
+    def window_stats(days):
+        target = last_date - timedelta(days=days)
+        sub = actual[actual["Date"] <= target]
+        if sub.empty:
+            return None, None
+        start_w = sub.iloc[-1]["Weight"]
+        delta = current_weight - start_w
+        return delta, delta / (days / 7)
+
+    d7, p7 = window_stats(7)
+    d30, p30 = window_stats(30)
+    days_total = (last_date - actual["Date"].iloc[0]).days
+    d_total = current_weight - start_weight
+    p_total = d_total / (days_total / 7) if days_total > 0 else 0
+
+    if d7 is not None and d7 > 0:
+        verdict = f"**Reversed** — gained {d7:+.2f} kg in the last 7 days"
+        v_color = "#DC2626"
+    elif p_total >= 0:
+        verdict = "**No baseline yet** — overall trend not yet downward"
+        v_color = "#888"
+    elif p7 is not None:
+        ratio = p7 / p_total
+        if ratio > 1.3:
+            verdict = f"**Accelerating** — last 7 days are {ratio:.1f}× your average pace"
+            v_color = "#15803D"
+        elif ratio < 0.7:
+            verdict = f"**Slowing** — last 7 days are {ratio:.1f}× your average pace"
+            v_color = "#D97706"
+        else:
+            verdict = "**Steady** — last 7 days are in line with your baseline"
+            v_color = "#0F766E"
+    else:
+        verdict = ""
+        v_color = "#888"
+
+    st.markdown(
+        f"<div style='font-size:0.95rem; margin:0.3rem 0 0.9rem; color:{v_color}'>{verdict}</div>",
+        unsafe_allow_html=True,
+    )
+
+    vc1, vc2, vc3 = st.columns(3)
+    vc1.metric("Last 7 days", f"{d7:+.2f} kg" if d7 is not None else "—",
+               f"{p7:+.2f}/wk" if p7 is not None else None, delta_color="off")
+    vc2.metric("Last 30 days", f"{d30:+.2f} kg" if d30 is not None else "—",
+               f"{p30:+.2f}/wk" if p30 is not None else None, delta_color="off")
+    vc3.metric("Overall", f"{d_total:+.2f} kg", f"{p_total:+.2f}/wk", delta_color="off")
+
+    # ---------- By Day of Week ----------
+    st.subheader("By Day of Week")
+
+    dow_df = actual.copy()
+    dow_df["change"] = dow_df["Weight"].diff()
+    dow_df["dow"] = dow_df["Date"].dt.day_name().str[:3]
+
+    overall_dow = dow_df.groupby("dow")["change"].mean()
+
+    sundays = dow_df[dow_df["dow"] == "Sun"]["Date"]
+    if not sundays.empty:
+        last_sun = sundays.max()
+        recent_start = last_sun - timedelta(days=13)
+        recent_dow_df = dow_df[(dow_df["Date"] >= recent_start) & (dow_df["Date"] <= last_sun)]
+        recent_dow = recent_dow_df.groupby("dow")["change"].mean()
+        recent_label = f"Last 2 wks (to {last_sun.strftime('%d %b')})"
+    else:
+        recent_dow = pd.Series(dtype=float)
+        recent_label = "Last 2 wks"
+
+    def fmt_change(v):
+        return "—" if pd.isna(v) else f"{v:+.2f} kg"
+
+    def change_color(v):
+        if pd.isna(v):
+            return "#888"
+        return "#0F766E" if v < 0 else "#B45309"
+
+    dow_rows = ""
+    for d in ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]:
+        a = overall_dow.get(d, float("nan"))
+        r = recent_dow.get(d, float("nan"))
+        dow_rows += (
+            f"<tr><td>{d}</td>"
+            f"<td style='text-align:right; color:{change_color(a)}; font-weight:600'>{fmt_change(a)}</td>"
+            f"<td style='text-align:right; color:{change_color(r)}; font-weight:600'>{fmt_change(r)}</td></tr>"
+        )
+
+    st.markdown(
+        f"""<table>
+        <thead><tr><th>Day</th>
+        <th style='text-align:right'>All-time avg</th>
+        <th style='text-align:right'>{recent_label}</th></tr></thead>
+        <tbody>{dow_rows}</tbody>
+        </table>""",
+        unsafe_allow_html=True,
+    )
+
+    # ---------- Weekend Damage ----------
+    st.subheader("Weekend Damage")
+
+    weekends_list = []
+    for sun_date in dow_df[dow_df["dow"] == "Sun"]["Date"]:
+        sat_date = sun_date - timedelta(days=1)
+        sat_row = dow_df[dow_df["Date"] == sat_date]
+        sun_row = dow_df[dow_df["Date"] == sun_date]
+        sat_chg = sat_row["change"].iloc[0] if not sat_row.empty and not pd.isna(sat_row["change"].iloc[0]) else 0
+        sun_chg = sun_row["change"].iloc[0] if not sun_row.empty and not pd.isna(sun_row["change"].iloc[0]) else 0
+        weekends_list.append((sat_date, sun_date, sat_chg + sun_chg))
+
+    if weekends_list:
+        avg_weekend = sum(w[2] for w in weekends_list) / len(weekends_list)
+        recent_weekends = weekends_list[-4:]
+
+        wk_rows = ""
+        for sat, sun, net in recent_weekends:
+            label = f"{sat.strftime('%d %b')} – {sun.strftime('%d %b')}"
+            wk_rows += (
+                f"<tr><td>{label}</td>"
+                f"<td style='text-align:right; color:{change_color(net)}; font-weight:600'>{net:+.2f} kg</td></tr>"
+            )
+
+        st.markdown(
+            f"""<table>
+            <thead><tr><th>Weekend</th><th style='text-align:right'>Sat + Sun net</th></tr></thead>
+            <tbody>{wk_rows}</tbody>
+            </table>
+            <div style='margin-top:0.7rem; color:#666; font-size:0.85rem'>
+            Average across all weekends:
+            <span style='color:{change_color(avg_weekend)}; font-weight:600'>{avg_weekend:+.2f} kg</span>
+            </div>""",
+            unsafe_allow_html=True,
+        )
 
 with tab_ai:
     st.markdown(ANALYSIS_MARKDOWN)
