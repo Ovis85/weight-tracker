@@ -452,6 +452,102 @@ with tab_overview:
 
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False, "scrollZoom": False, "doubleClick": False})
 
+    # ---------- On Track? ----------
+    st.subheader("On Track?")
+
+    SLOW_BAND = 0.15
+    FAST_BAND = 0.40
+
+    days_in = (last_date - actual["Date"].iloc[0]).days
+    expected_loss = (days_in / 7) * WEEKLY_LOSS_RATE
+    actual_loss = start_weight - current_weight
+    overall_pace = actual_loss / (days_in / 7) if days_in > 0 else 0
+    diff_vs_plan = actual_loss - expected_loss
+
+    if overall_pace < SLOW_BAND:
+        ov_verdict, ov_color = "Too slow", "#D97706"
+    elif overall_pace > FAST_BAND:
+        ov_verdict, ov_color = "Too fast — muscle-loss risk", "#EA580C"
+    else:
+        ov_verdict, ov_color = "On track", "#15803D"
+
+    diff_color = "#15803D" if diff_vs_plan >= 0 else "#D97706"
+    diff_label = "ahead of plan" if diff_vs_plan >= 0 else "behind plan"
+
+    st.markdown(
+        f"""<div style='background:white; border:1px solid #ECEAE3; border-left:4px solid {ov_color};
+                      border-radius:14px; padding:1rem 1.2rem; margin-bottom:1rem;
+                      box-shadow:0 2px 8px rgba(0,0,0,0.03)'>
+            <div style='color:#888; font-size:0.78rem; font-weight:500; text-transform:uppercase; letter-spacing:0.05em'>Overall pace</div>
+            <div style='color:{ov_color}; font-size:1.4rem; font-weight:700; margin:0.2rem 0'>{ov_verdict}</div>
+            <div style='color:#555; font-size:0.92rem; line-height:1.55'>
+                <strong>{overall_pace:.2f} kg/wk</strong> over {days_in} days vs target <strong>{WEEKLY_LOSS_RATE} kg/wk</strong>.
+                Lost <strong>{actual_loss:.2f} kg</strong>; plan said <strong>{expected_loss:.2f} kg</strong> by now —
+                <span style='color:{diff_color}; font-weight:600'>{abs(diff_vs_plan):.2f} kg {diff_label}</span>.
+            </div>
+        </div>""",
+        unsafe_allow_html=True,
+    )
+
+    sundays_df = actual.dropna(subset=["7da"]).sort_values("Date").reset_index(drop=True)
+    if len(sundays_df) >= 2:
+        wk_dates, wk_deltas, wk_colors = [], [], []
+        for i in range(1, len(sundays_df)):
+            delta = sundays_df.iloc[i]["7da"] - sundays_df.iloc[i - 1]["7da"]
+            if delta > 0:
+                color = "#DC2626"
+            elif delta > -SLOW_BAND:
+                color = "#D97706"
+            elif delta < -FAST_BAND:
+                color = "#EA580C"
+            else:
+                color = "#15803D"
+            wk_dates.append(sundays_df.iloc[i]["Date"])
+            wk_deltas.append(delta)
+            wk_colors.append(color)
+
+        wk_fig = go.Figure()
+        wk_fig.add_hrect(y0=-FAST_BAND, y1=-SLOW_BAND, fillcolor="#15803D", opacity=0.08, line_width=0)
+        wk_fig.add_hline(
+            y=-WEEKLY_LOSS_RATE,
+            line_dash="dash", line_color="#0F766E", line_width=1.5,
+            annotation_text=f"Target −{WEEKLY_LOSS_RATE} kg/wk",
+            annotation_font=dict(color="#0F766E", size=10),
+            annotation_position="top right",
+        )
+        wk_fig.add_hline(y=0, line_color="#CBC2B0", line_width=1)
+        wk_fig.add_trace(go.Bar(
+            x=wk_dates, y=wk_deltas,
+            marker=dict(color=wk_colors),
+            text=[f"{d:+.2f}" for d in wk_deltas],
+            textposition="outside",
+            textfont=dict(size=10, color="#444"),
+            hovertemplate="Week ending %{x|%d %b}<br>Δ %{y:+.2f} kg<extra></extra>",
+        ))
+        wk_fig.update_layout(
+            plot_bgcolor="white", paper_bgcolor="white",
+            font=dict(family="-apple-system, system-ui, sans-serif", color="#555"),
+            xaxis=dict(tickangle=-45, tickfont=dict(size=10, color="#888"),
+                       fixedrange=True, gridcolor="#F0EEE8", showline=False, zeroline=False),
+            yaxis=dict(tickfont=dict(size=10, color="#888"),
+                       title=dict(text="Δ 7-day avg (kg)", font=dict(size=11, color="#666")),
+                       fixedrange=True, gridcolor="#F0EEE8", showline=False, zeroline=False),
+            height=300,
+            margin=dict(l=10, r=10, t=20, b=10),
+            showlegend=False,
+            bargap=0.35,
+        )
+        st.plotly_chart(wk_fig, use_container_width=True,
+                        config={"displayModeBar": False, "scrollZoom": False, "doubleClick": False})
+
+        st.markdown(
+            f"""<div style='color:#666; font-size:0.85rem; margin-top:-0.5rem; line-height:1.5'>
+            Green band = on-target (−{SLOW_BAND} to −{FAST_BAND} kg/wk). Above zero = gained;
+            shallow loss = stalling; below band = risk of muscle loss.
+            </div>""",
+            unsafe_allow_html=True,
+        )
+
     # ---------- Trend Velocity ----------
     st.subheader("Trend Velocity")
 
