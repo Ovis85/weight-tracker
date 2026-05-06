@@ -1,9 +1,11 @@
+import os
 import streamlit as st
 import gspread
 from google.oauth2.service_account import Credentials
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
+import anthropic
 from datetime import datetime, timedelta
 
 SHEET_ID = "16i8iuwieWRI7nIu4JpZjnvg9PEWCMOPPCWgAawr7wpY"
@@ -55,38 +57,109 @@ def log_weight(date, weight):
     return False
 
 
-ANALYSIS_MARKDOWN = """*Last updated: 5 May 2026*
+ANALYSIS_SYSTEM_PROMPT = """You are analyzing Brian's weight cut data. He's a 40yo Senior Data Scientist cutting toward a 64 kg goal. The real goal is body composition — visible abs at 64 kg with current muscle mass (estimated 10-11% BF). Target rate: 0.25 kg/week. Going faster than ~0.40 kg/wk risks muscle loss; going slower than 0.15 kg/wk means he's stalling. Brian wants direct, data-driven insight — no fluff, no generic advice.
+
+Output strict markdown with these five sections in order, using the exact ## headers:
 
 ## Headlines
-- **Down 2.60 kg overall** (70.40 → 67.80) over 76 days at **0.24 kg/week** — right on your 0.25 target.
-- **Last 30 days: -1.45 kg.** Pace has *accelerated* — nearly double the 0.18 kg/week running average.
-- **Last 7 days: -0.65 kg.** Your best week of the cut. The "first uptick" worry from last week was noise.
+3 bullets: total progress (kg + kg/wk), last 30-day pace, last 7-day pace. Bold the key numbers.
 
 ## Trend Analysis
-- **Daily**: still ~0.5 kg weekly oscillation — Mon/Wed lightest, Fri/Sat heaviest. Pattern unchanged.
-- **Weekly (7-day avgs)**: 70.35 → 70.18 → 69.98 → 69.55 → 69.27 → 68.94 → 68.89 → 68.05 → **68.09** → trending toward ~67.85 next Sunday.
-  The Apr 26 → May 3 jump (+0.04) was effectively flat, not a reversal. The 7-day rolling MA has dropped from 68.26 (May 1) to **67.87** today — a 0.39 kg drop in 4 days.
-- **Overall**: clean linear descent. Last 60 days: -2.05 kg. Last 30 days: -1.45 kg. Most recent stretch is the steepest of the cut.
+3-4 bullets covering Daily oscillation patterns, Weekly (7-day avg) trajectory with the actual sequence of recent Sunday 7da values, and Overall descent shape.
 
 ## Interesting Facts
-1. **Yesterday (Mon May 4) was a new all-time low: 67.55 kg.** The previous floor (67.65 on Apr 22) held for almost 2 weeks before being broken.
-2. **Mondays are your high-signal day.** Avg daily change on Mondays across the cut: **-0.20 kg** — by far your biggest drop day. Tuesday adds another -0.09. By Wednesday you're at the week's true reading.
-3. **Weekend damage has shrunk.** Sat+Sun combined averaged +0.21 kg early in the cut; the last two weekends netted -0.10 and -0.45. Whatever you changed in late April is working.
-4. **You're now 3.80 kg from start, 3.80 kg into a 6.40 kg cut — exactly 41% to goal.** At current 30-day pace (1.45 kg/month) you hit 64.0 in **~11 weeks** (mid-July). At the original 0.25/week pace it's 15 weeks.
-5. **The Sydney trip cost you nothing.** You logged 68.25 on return (Apr 20) and you're 0.45 kg below that 15 days later. Travel is not your bottleneck.
+4-5 numbered insights pulled from the data: new lows, day-of-week patterns, weekend behavior, % to goal, projected goal date.
 
 ## Actionable Takeaways
-- **Hold the line — don't celebrate-eat.** A 0.65 kg week feels like license to relax; that's exactly when people give back two weeks of progress in one weekend.
-- **Watch Sunday May 10's 7da.** A reading ≤67.90 confirms you've moved into a new range. ≤67.70 would be a meaningful step-down.
-- **Lock the weekend behaviors.** The last two weekends were unusually clean — figure out what was different (food consistency? earlier dinners? lower alcohol?) and keep doing it.
-- **Re-check body comp around 66.5 kg**, not at the goal. If muscle mass is holding, the 64 kg target stays valid; if you're shedding lean tissue, you may want to slow the rate or recalculate the target.
-- **Sub-goal: 67.0 by May 19.** That's 0.80 kg in 2 weeks — slightly above your average pace but well inside the last 7 days' rate.
+4-5 bullets — each must reference a specific number or signal from the data. No generic dieting advice.
 
 ## Watch For
-- **Mon/Tue rebounds above 68.0.** With 7ma at 67.87, any Mon or Tue reading >68.0 means the trend has stalled. Last 4 Mondays: 68.25, 68.45, 67.55 — the May 4 reading is the new benchmark.
-- **A 7da increase ≥0.20 kg.** One flat Sunday is fine; a real rise is the signal to look at calories/sleep/training, not the day-to-day noise.
-- **Friday spikes >0.40 kg.** Pattern from late April held — Thu→Fri averages +0.07 but spikes flag a high-sodium or high-carb Thursday worth noting.
-"""
+3 specific signals to monitor next week (e.g., "Sunday 7da above X", "Mon/Tue rebounds over Y").
+
+Lead with the *Last updated* timestamp on the first line in italics. Use bold for numbers, italics for emphasis only when warranted."""
+
+
+def get_anthropic_client():
+    api_key = None
+    try:
+        api_key = st.secrets.get("anthropic_api_key")
+    except Exception:
+        pass
+    if not api_key:
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        return None
+    return anthropic.Anthropic(api_key=api_key)
+
+
+def build_analysis_data_block(df, goal_weight, target_rate):
+    actual = df.dropna(subset=["Weight"]).copy()
+    actual["change"] = actual["Weight"].diff()
+    actual["dow"] = actual["Date"].dt.day_name().str[:3]
+
+    last_date = actual["Date"].iloc[-1]
+    current = actual["Weight"].iloc[-1]
+    start = actual["Weight"].iloc[0]
+    days = (last_date - actual["Date"].iloc[0]).days
+    overall_per_wk = (start - current) / (days / 7) if days > 0 else 0
+
+    recent = actual.tail(45)[["Date", "Day", "Weight", "7da", "7ma", "3ma"]].copy()
+    recent["Date"] = recent["Date"].dt.strftime("%Y-%m-%d")
+    recent_csv = recent.to_csv(index=False)
+
+    dow_avg = actual.groupby("dow")["change"].mean().round(3).to_dict()
+    sundays_7da = actual.dropna(subset=["7da"]).tail(10)
+    sundays_str = ", ".join(
+        f"{d.strftime('%d %b')}={v:.2f}"
+        for d, v in zip(sundays_7da["Date"], sundays_7da["7da"])
+    )
+
+    waist_block = ""
+    if "Waist" in df.columns:
+        waist_data = df.dropna(subset=["Waist"]).tail(8)
+        if not waist_data.empty:
+            waist_block = "\nRecent waist (cm): " + ", ".join(
+                f"{d.strftime('%d %b')}={v:.1f}"
+                for d, v in zip(waist_data["Date"], waist_data["Waist"])
+            )
+
+    return f"""Today: {last_date.strftime('%a %d %b %Y')}
+Current weight: {current:.2f} kg
+Start weight: {start:.2f} kg ({days} days ago)
+Overall pace: {overall_per_wk:.2f} kg/wk
+Goal: {goal_weight} kg
+Target rate: {target_rate} kg/week
+
+Day-of-week avg daily change (kg, all-time): {dow_avg}
+Recent Sunday 7-day avgs: {sundays_str}{waist_block}
+
+Last 45 days of readings (CSV):
+{recent_csv}
+
+Generate the analysis now."""
+
+
+def generate_ai_analysis(df, goal_weight, target_rate):
+    client = get_anthropic_client()
+    if client is None:
+        return None, "no_key"
+    user_msg = build_analysis_data_block(df, goal_weight, target_rate)
+    try:
+        response = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=2000,
+            system=[
+                {
+                    "type": "text",
+                    "text": ANALYSIS_SYSTEM_PROMPT,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ],
+            messages=[{"role": "user", "content": user_msg}],
+        )
+        return response.content[0].text, None
+    except Exception as e:
+        return None, str(e)
 
 
 st.set_page_config(page_title="Weight Tracker", initial_sidebar_state="collapsed")
@@ -767,4 +840,39 @@ with tab_overview:
         )
 
 with tab_ai:
-    st.markdown(ANALYSIS_MARKDOWN)
+    btn_col, ts_col = st.columns([1, 2])
+    with btn_col:
+        gen_clicked = st.button("Generate analysis", key="gen_ai", use_container_width=True)
+    with ts_col:
+        ts = st.session_state.get("analysis_ts")
+        if ts:
+            st.markdown(
+                f"<div style='color:#888; font-size:0.8rem; padding-top:0.6rem'>Last generated {ts.strftime('%d %b %Y, %H:%M')}</div>",
+                unsafe_allow_html=True,
+            )
+
+    if gen_clicked:
+        with st.spinner("Analyzing your data…"):
+            analysis, err = generate_ai_analysis(df, GOAL_WEIGHT, WEEKLY_LOSS_RATE)
+        if err == "no_key":
+            st.error(
+                "No Anthropic API key found. Add `anthropic_api_key` to Streamlit secrets "
+                "(or set `ANTHROPIC_API_KEY` env var locally)."
+            )
+        elif err:
+            st.error(f"Generation failed: {err}")
+        else:
+            st.session_state["analysis"] = analysis
+            st.session_state["analysis_ts"] = datetime.now()
+            st.rerun()
+
+    if "analysis" in st.session_state:
+        st.markdown(st.session_state["analysis"])
+    else:
+        st.markdown(
+            "<div style='color:#888; padding:1.5rem 0'>"
+            "Click <strong>Generate analysis</strong> for an AI-written summary based on your latest data. "
+            "Costs ~1¢ per generation."
+            "</div>",
+            unsafe_allow_html=True,
+        )
