@@ -37,6 +37,8 @@ def load_data():
     df["Date"] = pd.to_datetime(df["Date"], format="%d/%m/%Y")
     for col in ["Weight", "7da", "7ma", "3ma"]:
         df[col] = pd.to_numeric(df[col], errors="coerce")
+    if "Waist" in df.columns:
+        df["Waist"] = pd.to_numeric(df["Waist"], errors="coerce")
 
     return df.sort_values("Date").reset_index(drop=True)
 
@@ -598,6 +600,70 @@ with tab_overview:
     vc2.metric("Last 30 days", f"{d30:+.2f} kg" if d30 is not None else "—",
                f"{p30:+.2f}/wk" if p30 is not None else None, delta_color="off")
     vc3.metric("Overall", f"{d_total:+.2f} kg", f"{p_total:+.2f}/wk", delta_color="off")
+
+    # ---------- Waist ----------
+    st.subheader("Waist")
+
+    if "Waist" not in df.columns:
+        st.markdown(
+            """<div style='color:#888; font-size:0.92rem; padding:0.9rem 1rem;
+                          background:white; border:1px solid #ECEAE3;
+                          border-radius:12px; line-height:1.5'>
+            No <code>Waist</code> column in the sheet yet — add it as a header in column G,
+            then log Sunday measurements. Chart will appear automatically.
+            </div>""",
+            unsafe_allow_html=True,
+        )
+    else:
+        waist_data = df.dropna(subset=["Waist"]).sort_values("Date").reset_index(drop=True)
+        if waist_data.empty:
+            st.markdown(
+                """<div style='color:#888; font-size:0.92rem; padding:0.9rem 1rem;
+                              background:white; border:1px solid #ECEAE3;
+                              border-radius:12px; line-height:1.5'>
+                No measurements yet — log your first reading on Sunday morning
+                (fasted, at navel, relaxed exhale).
+                </div>""",
+                unsafe_allow_html=True,
+            )
+        else:
+            latest_waist = waist_data.iloc[-1]["Waist"]
+            first_waist = waist_data.iloc[0]["Waist"]
+            delta_waist = latest_waist - first_waist
+            wc1, wc2 = st.columns(2)
+            wc1.metric("Current", f"{latest_waist:.1f} cm")
+            wc2.metric("Δ since start",
+                       f"{delta_waist:+.1f} cm" if len(waist_data) >= 2 else "—")
+
+            if len(waist_data) >= 2:
+                wfig = go.Figure()
+                wfig.add_trace(go.Scatter(
+                    x=waist_data["Date"], y=waist_data["Waist"],
+                    mode="lines+markers",
+                    name="Waist",
+                    line=dict(color="#0F766E", width=2.5),
+                    marker=dict(size=8, color="#0F766E"),
+                ))
+                wfig.update_layout(
+                    plot_bgcolor="white", paper_bgcolor="white",
+                    font=dict(family="-apple-system, system-ui, sans-serif", color="#555"),
+                    xaxis=dict(tickangle=-45, tickfont=dict(size=10, color="#888"),
+                               fixedrange=True, gridcolor="#F0EEE8", showline=False, zeroline=False),
+                    yaxis=dict(tickfont=dict(size=10, color="#888"),
+                               title=dict(text="cm", font=dict(size=11, color="#666")),
+                               fixedrange=True, gridcolor="#F0EEE8", showline=False, zeroline=False),
+                    height=280,
+                    margin=dict(l=10, r=10, t=20, b=10),
+                    showlegend=False,
+                )
+                st.plotly_chart(wfig, use_container_width=True,
+                                config={"displayModeBar": False, "scrollZoom": False, "doubleClick": False})
+            else:
+                st.markdown(
+                    "<div style='color:#888; font-size:0.85rem; margin-top:0.4rem'>"
+                    "First reading logged — trend chart appears from your second measurement.</div>",
+                    unsafe_allow_html=True,
+                )
 
     # ---------- By Day of Week ----------
     st.subheader("By Day of Week")
