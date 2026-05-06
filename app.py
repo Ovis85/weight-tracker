@@ -2,6 +2,7 @@ import streamlit as st
 import gspread
 from google.oauth2.service_account import Credentials
 import pandas as pd
+import numpy as np
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 
@@ -324,10 +325,30 @@ latest = df.dropna(subset=["Weight"]).iloc[-1]
 current_weight = latest["Weight"]
 start_weight = df.dropna(subset=["Weight"]).iloc[0]["Weight"]
 remaining = current_weight - GOAL_WEIGHT
-weeks_to_goal = remaining / WEEKLY_LOSS_RATE
 last_date = latest["Date"]
-projected_date = last_date + timedelta(weeks=weeks_to_goal)
 progress = max(0.0, min(1.0, (start_weight - current_weight) / (start_weight - GOAL_WEIGHT)))
+
+
+def project_goal_date(actual_df, goal, days_window=30):
+    """Linear regression on the last `days_window` days; project to goal weight."""
+    cutoff = actual_df["Date"].iloc[-1] - timedelta(days=days_window)
+    recent = actual_df[actual_df["Date"] >= cutoff]
+    if len(recent) < 7:
+        return None, None
+    x = (recent["Date"] - recent["Date"].iloc[0]).dt.days.values.astype(float)
+    y = recent["Weight"].values.astype(float)
+    slope, intercept = np.polyfit(x, y, 1)
+    if slope >= -0.001:
+        return None, slope
+    last_x = x[-1]
+    current_fit = intercept + slope * last_x
+    days_to_goal = (goal - current_fit) / slope
+    return recent["Date"].iloc[-1] + timedelta(days=days_to_goal), slope
+
+
+actual_full = df.dropna(subset=["Weight"]).reset_index(drop=True)
+projected_date, recent_slope = project_goal_date(actual_full, GOAL_WEIGHT)
+recent_pace_per_wk = -recent_slope * 7 if recent_slope is not None else None
 
 # --- Daily insight ---
 actual_for_insight = df.dropna(subset=["Weight"]).copy()
@@ -356,7 +377,11 @@ with tab_overview:
     c2.metric("Goal", f"{GOAL_WEIGHT} kg")
     c3, c4 = st.columns(2)
     c3.metric("To go", f"{remaining:.1f} kg")
-    c4.metric("Est. goal date", projected_date.strftime("%d %b %Y"))
+    if projected_date is not None:
+        pace_label = f"@ {recent_pace_per_wk:.2f} kg/wk (last 30d)"
+        c4.metric("Est. goal date", projected_date.strftime("%d %b %Y"), pace_label, delta_color="off")
+    else:
+        c4.metric("Est. goal date", "Stalled", "no recent loss", delta_color="off")
 
     st.progress(progress, text=f"{progress * 100:.1f}% of the way there")
 
@@ -403,17 +428,18 @@ with tab_overview:
         annotation_position="top right",
     )
 
-    fig.add_trace(go.Scatter(
-        x=[last_date, projected_date],
-        y=[current_weight, GOAL_WEIGHT],
-        mode="lines",
-        name="Projection",
-        line=dict(color="#DC2626", width=1.5, dash="dot"),
-        opacity=0.5,
-    ))
+    if projected_date is not None:
+        fig.add_trace(go.Scatter(
+            x=[last_date, projected_date],
+            y=[current_weight, GOAL_WEIGHT],
+            mode="lines",
+            name="Projection",
+            line=dict(color="#DC2626", width=1.5, dash="dot"),
+            opacity=0.5,
+        ))
 
     chart_start = actual["Date"].min()
-    chart_end = projected_date
+    chart_end = projected_date if projected_date is not None else last_date + timedelta(days=30)
 
     fig.update_layout(
         plot_bgcolor="white",
@@ -460,18 +486,25 @@ with tab_overview:
     SLOW_BAND = 0.15
     FAST_BAND = 0.40
 
+    def classify_pace(loss_per_wk):
+        """Return (status, color) for a positive loss-per-week value."""
+        if loss_per_wk <= 0:
+            return "Gained", "#DC2626"
+        if loss_per_wk < SLOW_BAND:
+            return "Too slow", "#D97706"
+        if loss_per_wk > FAST_BAND:
+            return "Too fast", "#EA580C"
+        return "On target", "#15803D"
+
     days_in = (last_date - actual["Date"].iloc[0]).days
     expected_loss = (days_in / 7) * WEEKLY_LOSS_RATE
     actual_loss = start_weight - current_weight
-    overall_pace = actual_loss / (days_in / 7) if days_in > 0 else 0
+    overall_loss_per_wk = actual_loss / (days_in / 7) if days_in > 0 else 0
     diff_vs_plan = actual_loss - expected_loss
 
-    if overall_pace < SLOW_BAND:
-        ov_verdict, ov_color = "Too slow", "#D97706"
-    elif overall_pace > FAST_BAND:
-        ov_verdict, ov_color = "Too fast — muscle-loss risk", "#EA580C"
-    else:
-        ov_verdict, ov_color = "On track", "#15803D"
+    ov_verdict, ov_color = classify_pace(overall_loss_per_wk)
+    if ov_verdict == "Too fast":
+        ov_verdict = "Too fast — muscle-loss risk"
 
     diff_color = "#15803D" if diff_vs_plan >= 0 else "#D97706"
     diff_label = "ahead of plan" if diff_vs_plan >= 0 else "behind plan"
@@ -483,7 +516,7 @@ with tab_overview:
             <div style='color:#888; font-size:0.78rem; font-weight:500; text-transform:uppercase; letter-spacing:0.05em'>Overall pace</div>
             <div style='color:{ov_color}; font-size:1.4rem; font-weight:700; margin:0.2rem 0'>{ov_verdict}</div>
             <div style='color:#555; font-size:0.92rem; line-height:1.55'>
-                <strong>{overall_pace:.2f} kg/wk</strong> over {days_in} days vs target <strong>{WEEKLY_LOSS_RATE} kg/wk</strong>.
+                <strong>{overall_loss_per_wk:.2f} kg/wk</strong> over {days_in} days vs target <strong>{WEEKLY_LOSS_RATE} kg/wk</strong>.
                 Lost <strong>{actual_loss:.2f} kg</strong>; plan said <strong>{expected_loss:.2f} kg</strong> by now —
                 <span style='color:{diff_color}; font-weight:600'>{abs(diff_vs_plan):.2f} kg {diff_label}</span>.
             </div>
@@ -491,19 +524,54 @@ with tab_overview:
         unsafe_allow_html=True,
     )
 
+    # Per-window pace cards, all framed vs the 0.25 kg/wk target.
+    def window_loss_per_wk(days):
+        cutoff = last_date - timedelta(days=days)
+        sub = actual[actual["Date"] <= cutoff]
+        if sub.empty:
+            return None
+        return (sub.iloc[-1]["Weight"] - current_weight) / (days / 7)
+
+    pace_windows = [
+        ("Last 7 days", window_loss_per_wk(7)),
+        ("Last 30 days", window_loss_per_wk(30)),
+        ("Overall", overall_loss_per_wk),
+    ]
+
+    pace_cards_html = "<div style='display:grid; grid-template-columns:repeat(3, 1fr); gap:0.6rem; margin-bottom:1rem'>"
+    for label, lpw in pace_windows:
+        if lpw is None:
+            pace_cards_html += (
+                f"<div style='background:white; border:1px solid #ECEAE3; border-radius:14px; "
+                f"padding:0.8rem 0.9rem; box-shadow:0 2px 8px rgba(0,0,0,0.03)'>"
+                f"<div style='color:#888; font-size:0.7rem; font-weight:500; text-transform:uppercase; letter-spacing:0.05em'>{label}</div>"
+                f"<div style='color:#1A1A1A; font-size:1.15rem; font-weight:700; margin-top:0.2rem'>—</div>"
+                f"</div>"
+            )
+            continue
+        status, color = classify_pace(lpw)
+        diff_to_target = lpw - WEEKLY_LOSS_RATE
+        diff_text = f"{diff_to_target:+.2f} vs target"
+        pace_cards_html += (
+            f"<div style='background:white; border:1px solid #ECEAE3; border-radius:14px; "
+            f"padding:0.8rem 0.9rem; box-shadow:0 2px 8px rgba(0,0,0,0.03)'>"
+            f"<div style='color:#888; font-size:0.7rem; font-weight:500; text-transform:uppercase; letter-spacing:0.05em'>{label}</div>"
+            f"<div style='color:#1A1A1A; font-size:1.15rem; font-weight:700; margin-top:0.2rem'>−{lpw:.2f} kg/wk</div>"
+            f"<div style='color:{color}; font-size:0.78rem; font-weight:600; margin-top:0.15rem'>{status}</div>"
+            f"<div style='color:#999; font-size:0.72rem; margin-top:0.1rem'>{diff_text}</div>"
+            f"</div>"
+        )
+    pace_cards_html += "</div>"
+    st.markdown(pace_cards_html, unsafe_allow_html=True)
+
+    # 2-week rolling weekly bars (smoothed to absorb single-Sunday noise).
     sundays_df = actual.dropna(subset=["7da"]).sort_values("Date").reset_index(drop=True)
-    if len(sundays_df) >= 2:
+    if len(sundays_df) >= 3:
         wk_dates, wk_deltas, wk_colors = [], [], []
-        for i in range(1, len(sundays_df)):
-            delta = sundays_df.iloc[i]["7da"] - sundays_df.iloc[i - 1]["7da"]
-            if delta > 0:
-                color = "#DC2626"
-            elif delta > -SLOW_BAND:
-                color = "#D97706"
-            elif delta < -FAST_BAND:
-                color = "#EA580C"
-            else:
-                color = "#15803D"
+        for i in range(2, len(sundays_df)):
+            delta = (sundays_df.iloc[i]["7da"] - sundays_df.iloc[i - 2]["7da"]) / 2
+            loss = -delta
+            _, color = classify_pace(loss)
             wk_dates.append(sundays_df.iloc[i]["Date"])
             wk_deltas.append(delta)
             wk_colors.append(color)
@@ -524,7 +592,7 @@ with tab_overview:
             text=[f"{d:+.2f}" for d in wk_deltas],
             textposition="outside",
             textfont=dict(size=10, color="#444"),
-            hovertemplate="Week ending %{x|%d %b}<br>Δ %{y:+.2f} kg<extra></extra>",
+            hovertemplate="Week ending %{x|%d %b}<br>2-wk avg Δ %{y:+.2f} kg<extra></extra>",
         ))
         wk_fig.update_layout(
             plot_bgcolor="white", paper_bgcolor="white",
@@ -532,7 +600,7 @@ with tab_overview:
             xaxis=dict(tickangle=-45, tickfont=dict(size=10, color="#888"),
                        fixedrange=True, gridcolor="#F0EEE8", showline=False, zeroline=False),
             yaxis=dict(tickfont=dict(size=10, color="#888"),
-                       title=dict(text="Δ 7-day avg (kg)", font=dict(size=11, color="#666")),
+                       title=dict(text="2-wk rolling Δ (kg)", font=dict(size=11, color="#666")),
                        fixedrange=True, gridcolor="#F0EEE8", showline=False, zeroline=False),
             height=300,
             margin=dict(l=10, r=10, t=20, b=10),
@@ -544,62 +612,11 @@ with tab_overview:
 
         st.markdown(
             f"""<div style='color:#666; font-size:0.85rem; margin-top:-0.5rem; line-height:1.5'>
-            Green band = on-target (−{SLOW_BAND} to −{FAST_BAND} kg/wk). Above zero = gained;
-            shallow loss = stalling; below band = risk of muscle loss.
+            Each bar = 2-week rolling pace at that Sunday (smoothed to absorb single-week noise).
+            Green band = on-target (−{SLOW_BAND} to −{FAST_BAND} kg/wk).
             </div>""",
             unsafe_allow_html=True,
         )
-
-    # ---------- Trend Velocity ----------
-    st.subheader("Trend Velocity")
-
-    def window_stats(days):
-        target = last_date - timedelta(days=days)
-        sub = actual[actual["Date"] <= target]
-        if sub.empty:
-            return None, None
-        start_w = sub.iloc[-1]["Weight"]
-        delta = current_weight - start_w
-        return delta, delta / (days / 7)
-
-    d7, p7 = window_stats(7)
-    d30, p30 = window_stats(30)
-    days_total = (last_date - actual["Date"].iloc[0]).days
-    d_total = current_weight - start_weight
-    p_total = d_total / (days_total / 7) if days_total > 0 else 0
-
-    if d7 is not None and d7 > 0:
-        verdict = f"**Reversed** — gained {d7:+.2f} kg in the last 7 days"
-        v_color = "#DC2626"
-    elif p_total >= 0:
-        verdict = "**No baseline yet** — overall trend not yet downward"
-        v_color = "#888"
-    elif p7 is not None:
-        ratio = p7 / p_total
-        if ratio > 1.3:
-            verdict = f"**Accelerating** — last 7 days are {ratio:.1f}× your average pace"
-            v_color = "#15803D"
-        elif ratio < 0.7:
-            verdict = f"**Slowing** — last 7 days are {ratio:.1f}× your average pace"
-            v_color = "#D97706"
-        else:
-            verdict = "**Steady** — last 7 days are in line with your baseline"
-            v_color = "#0F766E"
-    else:
-        verdict = ""
-        v_color = "#888"
-
-    st.markdown(
-        f"<div style='font-size:0.95rem; margin:0.3rem 0 0.9rem; color:{v_color}'>{verdict}</div>",
-        unsafe_allow_html=True,
-    )
-
-    vc1, vc2, vc3 = st.columns(3)
-    vc1.metric("Last 7 days", f"{d7:+.2f} kg" if d7 is not None else "—",
-               f"{p7:+.2f}/wk" if p7 is not None else None, delta_color="off")
-    vc2.metric("Last 30 days", f"{d30:+.2f} kg" if d30 is not None else "—",
-               f"{p30:+.2f}/wk" if p30 is not None else None, delta_color="off")
-    vc3.metric("Overall", f"{d_total:+.2f} kg", f"{p_total:+.2f}/wk", delta_color="off")
 
     # ---------- Waist ----------
     st.subheader("Waist")
